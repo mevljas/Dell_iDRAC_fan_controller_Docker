@@ -28,6 +28,8 @@ set_iDRAC_login_string "$IDRAC_HOST" "$IDRAC_USERNAME" "$IDRAC_PASSWORD"
 get_Dell_server_model
 
 readonly DELL_POWEREDGE_GEN_14_OR_NEWER=false
+readonly CPU1_TEMPERATURE_INDEX=1
+readonly CPU2_TEMPERATURE_INDEX=2
 
 # Log main informations
 echo "Server model: $SERVER_MANUFACTURER $SERVER_MODEL"
