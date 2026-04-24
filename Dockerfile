@@ -1,6 +1,6 @@
 FROM ubuntu:latest
 
-LABEL org.opencontainers.image.authors="tigerblue77"
+LABEL org.opencontainers.image.authors="mevljas"
 
 RUN apt-get update
 

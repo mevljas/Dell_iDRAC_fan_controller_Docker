@@ -34,7 +34,7 @@
 1. Build image locally.
 
    ```bash
-   docker build -t tigerblue77/dell_idrac_fan_controller:dev .
+   docker build -t ghcr.io/mevljas/dell_idrac_fan_controller_docker:dev .
    ```
 
 2. Start a test container with realistic environment variables.
@@ -52,7 +52,7 @@
 - Improve temperature parsing resilience while preserving current safety behavior.
 - Refactor log formatting only, without changing fan-control decisions.
 - Review fan profile switching logic for edge cases and propose minimal safe fixes.
-- Update release workflow tag behavior and explain impact on Docker Hub and GHCR publishing.
+- Update release workflow tag behavior and explain impact on GHCR publishing.
 
 ## Definition of Done for Typical PRs
 - Change is minimal and localized.
