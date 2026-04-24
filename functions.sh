@@ -14,6 +14,109 @@ function apply_user_fan_control_profile() {
   CURRENT_FAN_CONTROL_PROFILE="User static fan control profile ($DECIMAL_FAN_SPEED%)"
 }
 
+# This function applies a user-specified static fan control profile for a decimal fan speed value.
+# Returns 0 on success and 1 on failure.
+function apply_user_fan_control_profile_with_speed() {
+  if (( $# != 1 )); then
+    return 1
+  fi
+
+  local -r TARGET_DECIMAL_FAN_SPEED="$1"
+  if ! is_integer "$TARGET_DECIMAL_FAN_SPEED"; then
+    return 1
+  fi
+  if [ "$TARGET_DECIMAL_FAN_SPEED" -lt 0 ] || [ "$TARGET_DECIMAL_FAN_SPEED" -gt 100 ]; then
+    return 1
+  fi
+
+  local -r TARGET_HEXADECIMAL_FAN_SPEED=$(convert_decimal_value_to_hexadecimal "$TARGET_DECIMAL_FAN_SPEED")
+
+  ipmitool -I $IDRAC_LOGIN_STRING raw 0x30 0x30 0x01 0x00 > /dev/null || return 1
+  ipmitool -I $IDRAC_LOGIN_STRING raw 0x30 0x30 0x02 0xff $TARGET_HEXADECIMAL_FAN_SPEED > /dev/null || return 1
+
+  CURRENT_FAN_CONTROL_PROFILE="User fan curve profile ($TARGET_DECIMAL_FAN_SPEED%)"
+  return 0
+}
+
+# Returns 0 if VALUE is an unsigned integer, 1 otherwise.
+function is_integer() {
+  if (( $# != 1 )); then
+    return 1
+  fi
+  local -r VALUE="$1"
+  [[ "$VALUE" =~ ^[0-9]+$ ]]
+}
+
+# Returns the hottest CPU temperature detected among available CPU sensors.
+# Returns non-zero if no valid CPU temperature is available.
+function get_max_cpu_temperature() {
+  if ! is_integer "$CPU1_TEMPERATURE"; then
+    return 1
+  fi
+
+  local max_cpu_temperature="$CPU1_TEMPERATURE"
+  if is_integer "$CPU2_TEMPERATURE" && [ "$CPU2_TEMPERATURE" -gt "$max_cpu_temperature" ]; then
+    max_cpu_temperature="$CPU2_TEMPERATURE"
+  fi
+
+  echo "$max_cpu_temperature"
+}
+
+# Calculates the fan speed percentage from current CPU temperature using a linear curve.
+# Parameters: CPU temperature, minimum fan speed, CPU threshold, ramp window.
+# Returns the target fan speed in percent or non-zero on invalid inputs.
+function calculate_curve_fan_speed() {
+  if (( $# != 4 )); then
+    return 1
+  fi
+
+  local -r CPU_TEMPERATURE="$1"
+  local -r MINIMUM_FAN_SPEED="$2"
+  local -r CPU_TEMPERATURE_THRESHOLD="$3"
+  local -r CURVE_RAMP_WINDOW="$4"
+
+  if ! is_integer "$CPU_TEMPERATURE" || ! is_integer "$MINIMUM_FAN_SPEED" || ! is_integer "$CPU_TEMPERATURE_THRESHOLD" || ! is_integer "$CURVE_RAMP_WINDOW"; then
+    return 1
+  fi
+  if [ "$MINIMUM_FAN_SPEED" -lt 0 ] || [ "$MINIMUM_FAN_SPEED" -gt 100 ]; then
+    return 1
+  fi
+  if [ "$CPU_TEMPERATURE_THRESHOLD" -le 0 ] || [ "$CURVE_RAMP_WINDOW" -le 0 ]; then
+    return 1
+  fi
+
+  local curve_start_temperature=$((CPU_TEMPERATURE_THRESHOLD - CURVE_RAMP_WINDOW))
+  if [ "$curve_start_temperature" -lt 1 ]; then
+    curve_start_temperature=1
+  fi
+
+  local target_fan_speed="$MINIMUM_FAN_SPEED"
+  if [ "$CPU_TEMPERATURE" -gt "$curve_start_temperature" ]; then
+    local -r interpolation_span=$((CPU_TEMPERATURE_THRESHOLD - curve_start_temperature))
+    if [ "$interpolation_span" -le 0 ]; then
+      return 1
+    fi
+
+    local temperature_delta=$((CPU_TEMPERATURE - curve_start_temperature))
+    if [ "$temperature_delta" -lt 0 ]; then
+      temperature_delta=0
+    fi
+    if [ "$temperature_delta" -gt "$interpolation_span" ]; then
+      temperature_delta="$interpolation_span"
+    fi
+
+    target_fan_speed=$((MINIMUM_FAN_SPEED + temperature_delta * (100 - MINIMUM_FAN_SPEED) / interpolation_span))
+  fi
+
+  if [ "$target_fan_speed" -lt 0 ]; then
+    target_fan_speed=0
+  elif [ "$target_fan_speed" -gt 100 ]; then
+    target_fan_speed=100
+  fi
+
+  echo "$target_fan_speed"
+}
+
 # Convert first parameter given ($DECIMAL_NUMBER) to hexadecimal
 # Usage : convert_decimal_value_to_hexadecimal $DECIMAL_NUMBER
 # Returns : hexadecimal value of DECIMAL_NUMBER

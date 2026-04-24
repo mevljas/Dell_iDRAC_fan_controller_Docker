@@ -22,6 +22,7 @@ HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 CMD [ "/a
 ENV IDRAC_HOST=local
 # ENV IDRAC_USERNAME=root
 # ENV IDRAC_PASSWORD=calvin
+# FAN_SPEED is the minimum fan speed used by the temperature curve (0-100).
 ENV FAN_SPEED=5
 ENV CPU_TEMPERATURE_THRESHOLD=50
 ENV CHECK_INTERVAL=60

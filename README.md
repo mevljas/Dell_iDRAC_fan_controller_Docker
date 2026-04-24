@@ -80,7 +80,7 @@ docker run -d \
   --name Dell_iDRAC_fan_controller \
   --restart=unless-stopped \
   -e IDRAC_HOST=local \
-  -e FAN_SPEED=<decimal or hexadecimal fan speed> \
+  -e FAN_SPEED=<decimal or hexadecimal minimum fan speed> \
   -e CPU_TEMPERATURE_THRESHOLD=<decimal temperature threshold> \
   -e CHECK_INTERVAL=<seconds between each check> \
   -e DISABLE_THIRD_PARTY_PCIE_CARD_DELL_DEFAULT_COOLING_RESPONSE=<true or false> \
@@ -98,7 +98,7 @@ docker run -d \
   -e IDRAC_HOST=<iDRAC IP address> \
   -e IDRAC_USERNAME=<iDRAC username> \
   -e IDRAC_PASSWORD=<iDRAC password> \
-  -e FAN_SPEED=<decimal or hexadecimal fan speed> \
+  -e FAN_SPEED=<decimal or hexadecimal minimum fan speed> \
   -e CPU_TEMPERATURE_THRESHOLD=<decimal temperature threshold> \
   -e CHECK_INTERVAL=<seconds between each check> \
   -e DISABLE_THIRD_PARTY_PCIE_CARD_DELL_DEFAULT_COOLING_RESPONSE=<true or false> \
@@ -120,7 +120,7 @@ services:
     restart: unless-stopped
     environment:
       - IDRAC_HOST=local
-      - FAN_SPEED=<decimal or hexadecimal fan speed>
+      - FAN_SPEED=<decimal or hexadecimal minimum fan speed>
       - CPU_TEMPERATURE_THRESHOLD=<decimal temperature threshold>
       - CHECK_INTERVAL=<seconds between each check>
       - DISABLE_THIRD_PARTY_PCIE_CARD_DELL_DEFAULT_COOLING_RESPONSE=<true or false>
@@ -143,7 +143,7 @@ services:
       - IDRAC_HOST=<iDRAC IP address>
       - IDRAC_USERNAME=<iDRAC username>
       - IDRAC_PASSWORD=<iDRAC password>
-      - FAN_SPEED=<decimal or hexadecimal fan speed>
+      - FAN_SPEED=<decimal or hexadecimal minimum fan speed>
       - CPU_TEMPERATURE_THRESHOLD=<decimal temperature threshold>
       - CHECK_INTERVAL=<seconds between each check>
       - DISABLE_THIRD_PARTY_PCIE_CARD_DELL_DEFAULT_COOLING_RESPONSE=<true or false>
@@ -160,8 +160,8 @@ All parameters are optional as they have default values (including default iDRAC
 - `IDRAC_HOST` parameter can be set to "local" or to your distant iDRAC's IP address. **Default** value is "local".
 - `IDRAC_USERNAME` parameter is only necessary if you're adressing a distant iDRAC. **Default** value is "root".
 - `IDRAC_PASSWORD` parameter is only necessary if you're adressing a distant iDRAC. **Default** value is "calvin".
-- `FAN_SPEED` parameter can be set as a decimal (from 0 to 100%) or hexadecimaladecimal value (from 0x00 to 0x64) you want to set the fans to. **Default** value is 5(%).
-- `CPU_TEMPERATURE_THRESHOLD` parameter is the T°junction (junction temperature) threshold beyond which the Dell fan mode defined in your BIOS will become active again (to protect the server hardware against overheat). **Default** value is 50(°C).
+- `FAN_SPEED` parameter can be set as a decimal (from 0 to 100%) or hexadecimal value (from 0x00 to 0x64) and is used as the minimum fan speed floor. The script then increases fan speed along a linear curve as CPU temperature rises. **Default** value is 5(%).
+- `CPU_TEMPERATURE_THRESHOLD` parameter is the T°junction (junction temperature) safety threshold. As temperature approaches this threshold, fan speed increases automatically. If it is exceeded, the script switches back to Dell default dynamic fan control profile for safety. **Default** value is 50(°C).
 - `CHECK_INTERVAL` parameter is the time (in seconds) between each temperature check and potential profile change. **Default** value is 60(s).
 - `DISABLE_THIRD_PARTY_PCIE_CARD_DELL_DEFAULT_COOLING_RESPONSE` parameter is a boolean that allows to disable third-party PCIe card Dell default cooling response. **Default** value is false.
 - `KEEP_THIRD_PARTY_PCIE_CARD_COOLING_RESPONSE_STATE_ON_EXIT` parameter is a boolean that allows to keep the third-party PCIe card Dell default cooling response state upon exit. **Default** value is false, so that it resets the third-party PCIe card Dell default cooling response to Dell default.
@@ -173,8 +173,9 @@ All parameters are optional as they have default values (including default iDRAC
 
 If your server frequently switches back to the default Dell fan mode:
 1. Check `Tcase` (case temperature) of your CPU on Intel Ark website and then set `CPU_TEMPERATURE_THRESHOLD` to a slightly lower value. Example with my CPUs ([Intel Xeon E5-2630L v2](https://www.intel.com/content/www/us/en/products/sku/75791/intel-xeon-processor-e52630l-v2-15m-cache-2-40-ghz/specifications.html)) : Tcase = 63°C, I set `CPU_TEMPERATURE_THRESHOLD` to 60(°C).
-2. If it's already good, adapt your `FAN_SPEED` value to increase the airflow and thus further decrease the temperature of your CPU(s)
+2. If it's already good, adapt your `FAN_SPEED` minimum value to raise baseline airflow and further decrease the temperature of your CPU(s)
 3. If neither increasing the fan speed nor increasing the threshold solves your problem, then it may be time to replace your thermal paste
+4. If logs mention fan-curve evaluation or temperature parsing failures, the script intentionally falls back to Dell dynamic fan control profile for safety. Check IPMI sensor output and container permissions in that case.
 
 <p align="right">(<a href="#top">back to top</a>)</p>
 
@@ -202,7 +203,7 @@ or
 export IDRAC_HOST=<iDRAC IP address>
 export IDRAC_USERNAME=<iDRAC username>
 export IDRAC_PASSWORD=<iDRAC password>
-export FAN_SPEED=<decimal or hexadecimal fan speed>
+export FAN_SPEED=<decimal or hexadecimal minimum fan speed>
 export CPU_TEMPERATURE_THRESHOLD=<decimal temperature threshold>
 export CHECK_INTERVAL=<seconds between each check>
 export DISABLE_THIRD_PARTY_PCIE_CARD_DELL_DEFAULT_COOLING_RESPONSE=<true or false>

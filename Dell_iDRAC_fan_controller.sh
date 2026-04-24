@@ -23,6 +23,25 @@ else
   readonly HEXADECIMAL_FAN_SPEED=$(convert_decimal_value_to_hexadecimal "$FAN_SPEED")
 fi
 
+if ! is_integer "$DECIMAL_FAN_SPEED" || [ "$DECIMAL_FAN_SPEED" -lt 0 ] || [ "$DECIMAL_FAN_SPEED" -gt 100 ]; then
+  print_error_and_exit "FAN_SPEED must be an integer from 0 to 100"
+fi
+if ! is_integer "$CPU_TEMPERATURE_THRESHOLD" || [ "$CPU_TEMPERATURE_THRESHOLD" -le 0 ]; then
+  print_error_and_exit "CPU_TEMPERATURE_THRESHOLD must be a positive integer"
+fi
+if ! is_integer "$CHECK_INTERVAL" || [ "$CHECK_INTERVAL" -le 0 ]; then
+  print_error_and_exit "CHECK_INTERVAL must be a positive integer"
+fi
+if ! is_integer "$FAN_CURVE_RAMP_WINDOW" || [ "$FAN_CURVE_RAMP_WINDOW" -le 0 ]; then
+  print_error_and_exit "FAN_CURVE_RAMP_WINDOW must be a positive integer"
+fi
+
+FAN_CURVE_START_TEMPERATURE=$((CPU_TEMPERATURE_THRESHOLD - FAN_CURVE_RAMP_WINDOW))
+if [ "$FAN_CURVE_START_TEMPERATURE" -lt 1 ]; then
+  FAN_CURVE_START_TEMPERATURE=1
+fi
+readonly FAN_CURVE_START_TEMPERATURE
+
 set_iDRAC_login_string "$IDRAC_HOST" "$IDRAC_USERNAME" "$IDRAC_PASSWORD"
 
 get_Dell_server_model
@@ -36,7 +55,8 @@ echo "Server model: $SERVER_MANUFACTURER $SERVER_MODEL"
 echo "iDRAC/IPMI host: $IDRAC_HOST"
 
 # Log the fan speed objective, CPU temperature threshold and check interval
-echo "Fan speed objective: $DECIMAL_FAN_SPEED%"
+echo "Fan speed floor: $DECIMAL_FAN_SPEED% (temperature curve enabled)"
+echo "Fan curve ramp starts at: ${FAN_CURVE_START_TEMPERATURE}°C"
 echo "CPU temperature threshold: "$CPU_TEMPERATURE_THRESHOLD"°C"
 echo "Check interval: ${CHECK_INTERVAL}s"
 echo ""
@@ -72,40 +92,41 @@ while true; do
   sleep "$CHECK_INTERVAL" &
   SLEEP_PROCESS_PID=$!
 
-  retrieve_temperatures $IS_EXHAUST_TEMPERATURE_SENSOR_PRESENT $IS_CPU2_TEMPERATURE_SENSOR_PRESENT
-
   # Initialize a variable to store the comments displayed when the fan control profile changed
   COMMENT=" -"
-  # Check if CPU 1 is overheating then apply Dell default dynamic fan control profile if true
-  if CPU1_OVERHEATING; then
+  if ! retrieve_temperatures $IS_EXHAUST_TEMPERATURE_SENSOR_PRESENT $IS_CPU2_TEMPERATURE_SENSOR_PRESENT; then
     apply_Dell_default_fan_control_profile
-
     if ! $IS_DELL_DEFAULT_FAN_CONTROL_PROFILE_APPLIED; then
       IS_DELL_DEFAULT_FAN_CONTROL_PROFILE_APPLIED=true
-
-      # If CPU 2 temperature sensor is present, check if it is overheating too.
-      # Do not apply Dell default dynamic fan control profile as it has already been applied before
-      if $IS_CPU2_TEMPERATURE_SENSOR_PRESENT && CPU2_OVERHEATING; then
-        COMMENT="CPU 1 and CPU 2 temperatures are too high, Dell default dynamic fan control profile applied for safety"
-      else
-        COMMENT="CPU 1 temperature is too high, Dell default dynamic fan control profile applied for safety"
-      fi
-    fi
-  # If CPU 2 temperature sensor is present, check if it is overheating then apply Dell default dynamic fan control profile if true
-  elif $IS_CPU2_TEMPERATURE_SENSOR_PRESENT && CPU2_OVERHEATING; then
-    apply_Dell_default_fan_control_profile
-
-    if ! $IS_DELL_DEFAULT_FAN_CONTROL_PROFILE_APPLIED; then
-      IS_DELL_DEFAULT_FAN_CONTROL_PROFILE_APPLIED=true
-      COMMENT="CPU 2 temperature is too high, Dell default dynamic fan control profile applied for safety"
+      COMMENT="Temperature retrieval failed, Dell default dynamic fan control profile applied for safety"
     fi
   else
-    apply_user_fan_control_profile
+    MAX_CPU_TEMPERATURE=$(get_max_cpu_temperature)
+    if [ -z "$MAX_CPU_TEMPERATURE" ]; then
+      apply_Dell_default_fan_control_profile
+      if ! $IS_DELL_DEFAULT_FAN_CONTROL_PROFILE_APPLIED; then
+        IS_DELL_DEFAULT_FAN_CONTROL_PROFILE_APPLIED=true
+        COMMENT="CPU temperature parsing failed, Dell default dynamic fan control profile applied for safety"
+      fi
+    elif [ "$MAX_CPU_TEMPERATURE" -gt "$CPU_TEMPERATURE_THRESHOLD" ]; then
+      apply_Dell_default_fan_control_profile
+      if ! $IS_DELL_DEFAULT_FAN_CONTROL_PROFILE_APPLIED; then
+        IS_DELL_DEFAULT_FAN_CONTROL_PROFILE_APPLIED=true
+        COMMENT="CPU temperature is too high (${MAX_CPU_TEMPERATURE}°C), Dell default dynamic fan control profile applied for safety"
+      fi
+    else
+      TARGET_FAN_SPEED=$(calculate_curve_fan_speed "$MAX_CPU_TEMPERATURE" "$DECIMAL_FAN_SPEED" "$CPU_TEMPERATURE_THRESHOLD" "$FAN_CURVE_RAMP_WINDOW")
 
-    # Check if user fan control profile is applied then apply it if not
-    if $IS_DELL_DEFAULT_FAN_CONTROL_PROFILE_APPLIED; then
-      IS_DELL_DEFAULT_FAN_CONTROL_PROFILE_APPLIED=false
-      COMMENT="CPU temperature decreased and is now OK (<= $CPU_TEMPERATURE_THRESHOLD°C), user's fan control profile applied."
+      if [ -z "$TARGET_FAN_SPEED" ] || ! apply_user_fan_control_profile_with_speed "$TARGET_FAN_SPEED"; then
+        apply_Dell_default_fan_control_profile
+        if ! $IS_DELL_DEFAULT_FAN_CONTROL_PROFILE_APPLIED; then
+          IS_DELL_DEFAULT_FAN_CONTROL_PROFILE_APPLIED=true
+          COMMENT="Fan curve evaluation failed, Dell default dynamic fan control profile applied for safety"
+        fi
+      elif $IS_DELL_DEFAULT_FAN_CONTROL_PROFILE_APPLIED; then
+        IS_DELL_DEFAULT_FAN_CONTROL_PROFILE_APPLIED=false
+        COMMENT="CPU temperature is now OK (<= $CPU_TEMPERATURE_THRESHOLD°C), fan curve control resumed."
+      fi
     fi
   fi
 
