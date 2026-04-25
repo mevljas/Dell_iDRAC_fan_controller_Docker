@@ -2,6 +2,8 @@
 
 # Dell iDRAC fan controller Docker image
 
+> Fork notice: this repository is a fork of the original Dell iDRAC fan controller project and is maintained under the mevljas GHCR image namespace.
+
 ## Table of contents
 <ol>
   <li><a href="#container-console-log-example">Container console log example</a></li>
@@ -159,6 +161,8 @@ services:
 ## Parameters
 
 All parameters are optional as they have default values (including default iDRAC username and password).
+
+The container `PATH` is inherited from the base image and normally does not need to be configured for this project.
 
 - `IDRAC_HOST` parameter can be set to "local" or to your distant iDRAC's IP address. **Default** value is "local".
 - `IDRAC_USERNAME` parameter is only necessary if you're adressing a distant iDRAC. **Default** value is "root".
