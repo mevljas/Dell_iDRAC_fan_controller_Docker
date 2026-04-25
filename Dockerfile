@@ -2,16 +2,17 @@ FROM ubuntu:latest
 
 LABEL org.opencontainers.image.authors="mevljas"
 
-RUN apt-get update
+RUN apt-get update \
+	&& apt-get install -y --no-install-recommends ipmitool \
+	&& rm -rf /var/lib/apt/lists/*
 
-RUN apt-get install ipmitool -y
+COPY functions.sh /app/functions.sh
+COPY constants.sh /app/constants.sh
+COPY healthcheck.sh /app/healthcheck.sh
+COPY Dell_iDRAC_fan_controller.sh /app/Dell_iDRAC_fan_controller.sh
 
-ADD functions.sh /app/functions.sh
-ADD constants.sh /app/constants.sh
-ADD healthcheck.sh /app/healthcheck.sh
-ADD Dell_iDRAC_fan_controller.sh /app/Dell_iDRAC_fan_controller.sh
-
-RUN chmod 0777 /app/functions.sh /app/healthcheck.sh /app/Dell_iDRAC_fan_controller.sh
+RUN chmod 0755 /app/functions.sh /app/healthcheck.sh /app/Dell_iDRAC_fan_controller.sh \
+	&& chmod 0644 /app/constants.sh
 
 WORKDIR /app
 
