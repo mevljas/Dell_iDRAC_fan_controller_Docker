@@ -177,7 +177,7 @@ function retrieve_temperatures() {
   if $IS_CPU2_TEMPERATURE_SENSOR_PRESENT; then
     CPU2_TEMPERATURE=$(echo $CPU_DATA | awk "{print \$$CPU2_TEMPERATURE_INDEX;}")
   else
-    CPU2_TEMPERATURE="-"
+    CPU2_TEMPERATURE=""
   fi
 
   # Initialize CPUS_TEMPERATURES
@@ -317,15 +317,17 @@ function print_temperature_array_line() {
   printf "%19s  %3d°C " "$(date +"%d-%m-%Y %T")" $LOCAL_INLET_TEMPERATURE
   # Itération sur les températures dans le tableau
   for temperature in "${CPUs_temperatures_array[@]}"; do
-    printf " %3d°C " $temperature
+    if is_integer "$temperature"; then
+      printf " %3d°C " $temperature
+    fi
   done
 
   printf " %5s°C  %40s  %51s  %s\n" "$LOCAL_EXHAUST_TEMPERATURE" "$LOCAL_CURRENT_FAN_CONTROL_PROFILE" "$LOCAL_THIRD_PARTY_PCIE_CARD_DELL_DEFAULT_COOLING_RESPONSE_STATUS" "$LOCAL_COMMENT"
 }
 
 # Define functions to check if CPU 1 and CPU 2 temperatures are above the threshold
-function CPU1_OVERHEATING() { [ $CPU1_TEMPERATURE -gt "$CPU_TEMPERATURE_THRESHOLD" ]; }
-function CPU2_OVERHEATING() { [ $CPU2_TEMPERATURE -gt "$CPU_TEMPERATURE_THRESHOLD" ]; }
+function CPU1_OVERHEATING() { is_integer "$CPU1_TEMPERATURE" && [ $CPU1_TEMPERATURE -gt "$CPU_TEMPERATURE_THRESHOLD" ]; }
+function CPU2_OVERHEATING() { is_integer "$CPU2_TEMPERATURE" && [ $CPU2_TEMPERATURE -gt "$CPU_TEMPERATURE_THRESHOLD" ]; }
 
 function print_error() {
   local -r ERROR_MESSAGE="$1"
